@@ -1,16 +1,14 @@
 package com.quiz.quiz_app;
 
 import android.app.AlertDialog;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
 import android.graphics.Color;
 import android.os.Bundle;
-import android.text.Html;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
-
-import androidx.annotation.NonNull;
-import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -23,13 +21,12 @@ import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 
 public class MainActivity extends AppCompatActivity implements View.OnClickListener {
-    TextView questionTextView;
-    TextView totalQuestionTextView;
-    Button ansA, ansB, ansC, ansD;
-    Button btn_submit;
+    TextView questionTextView, totalQuestionTextView, livesTextView;
+    Button ansA, ansB, ansC, ansD, btn_submit;
 
     int score = 0;
     int currentQuestionIndex = 0;
+    int lives = 5;
     String selectedAnswer = "";
 
     List<TriviaResponse.Result> questions = new ArrayList<>();
@@ -47,6 +44,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         ansC = findViewById(R.id.ans_c);
         ansD = findViewById(R.id.ans_d);
         btn_submit = findViewById(R.id.btn_submit);
+        livesTextView = findViewById(R.id.lives_text);
 
         ansA.setOnClickListener(this);
         ansB.setOnClickListener(this);
@@ -54,6 +52,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         ansD.setOnClickListener(this);
         btn_submit.setOnClickListener(this);
 
+        updateLivesDisplay();
         fetchQuestionsFromApi();
     }
 
@@ -65,30 +64,27 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         TriviaApi triviaApi = retrofit.create(TriviaApi.class);
 
-        triviaApi.getQuestions(5).enqueue(new Callback<>() {
+        triviaApi.getQuestions(5).enqueue(new Callback<TriviaResponse>() {
             @Override
             public void onResponse(@NonNull Call<TriviaResponse> call, @NonNull Response<TriviaResponse> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     questions = response.body().results;
-                    totalQuestionTextView.setText(getString(R.string.total_questions_text, questions.size()));
+                    totalQuestionTextView.setText("Questions Loaded: " + questions.size());
+                    currentQuestionIndex = 0;
                     loadNewQuestion();
-                } else {
-                    loadMockQuestions(); // fallback if response is empty
                 }
             }
 
             @Override
             public void onFailure(@NonNull Call<TriviaResponse> call, @NonNull Throwable t) {
                 Log.e("API_ERROR", "Failed to fetch questions: " + t.getMessage());
-                loadMockQuestions(); // fallback if network fails
+                loadMockQuestions();
             }
         });
-
     }
 
     private void loadMockQuestions() {
         questions.clear();
-
         for (int i = 0; i < QuestionAnswer.question.length; i++) {
             TriviaResponse.Result q = new TriviaResponse.Result();
             q.question = QuestionAnswer.question[i];
@@ -101,20 +97,20 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
             questions.add(q);
         }
-
-        totalQuestionTextView.setText(getString(R.string.total_questions_text, questions.size()));
+        totalQuestionTextView.setText("Questions Loaded: " + questions.size());
+        currentQuestionIndex = 0;
         loadNewQuestion();
     }
 
     private void loadNewQuestion() {
         if (currentQuestionIndex >= questions.size()) {
-            finishQuiz();
+            // Fetch more questions to make it endless
+            fetchQuestionsFromApi();
             return;
         }
 
         TriviaResponse.Result currentQ = questions.get(currentQuestionIndex);
-
-        questionTextView.setText(Html.fromHtml(currentQ.question, Html.FROM_HTML_MODE_LEGACY));
+        questionTextView.setText(android.text.Html.fromHtml(currentQ.question));
 
         currentChoices.clear();
         currentChoices.addAll(currentQ.incorrect_answers);
@@ -129,20 +125,26 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         selectedAnswer = "";
     }
 
-    private void finishQuiz() {
-        String passStatus = (score >= questions.size() * 0.6) ? "Passed" : "Failed";
+    private void updateLivesDisplay() {
+        StringBuilder sb = new StringBuilder("Lives: ");
+        for (int i = 0; i < lives; i++) sb.append("❤️");
+        livesTextView.setText(sb.toString());
+    }
 
+    private void gameOver() {
         new AlertDialog.Builder(this)
-                .setTitle(passStatus)
-                .setMessage(getString(R.string.score_message, score, questions.size()))
-                .setPositiveButton("Restart", (dialog, i) -> restartQuiz())
+                .setTitle("Game Over")
+                .setMessage("Your Score: " + score)
+                .setPositiveButton("Restart", ((dialog, i) -> restartGame()))
                 .setCancelable(false)
                 .show();
     }
 
-    private void restartQuiz() {
+    private void restartGame() {
         score = 0;
+        lives = 5;
         currentQuestionIndex = 0;
+        updateLivesDisplay();
         fetchQuestionsFromApi();
     }
 
@@ -160,6 +162,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 TriviaResponse.Result currentQ = questions.get(currentQuestionIndex);
                 if (selectedAnswer.equals(currentQ.correct_answer)) {
                     score++;
+                } else {
+                    lives--;
+                    updateLivesDisplay();
+                    if (lives <= 0) {
+                        gameOver();
+                        return;
+                    }
                 }
                 currentQuestionIndex++;
                 loadNewQuestion();
