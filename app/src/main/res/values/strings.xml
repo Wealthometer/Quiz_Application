@@ -1,3 +1,10 @@
 <resources>
-    <string name="app_name">Quiz_App</string>
+    <string name="app_name">Quiz App</string>
+
+    <!-- Text placeholders -->
+    <string name="total_questions_text">Total Questions: %1$d</string>
+    <string name="total_questions_placeholder">Total Questions: 0</string>
+    <string name="question_placeholder">Loading question&#8230;</string>
+    <string name="score_message">Your Score is %1$d Out of %2$d</string>
+    <string name="submit_text">Submit</string>
 </resources>

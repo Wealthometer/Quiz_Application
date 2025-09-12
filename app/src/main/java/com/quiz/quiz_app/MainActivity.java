@@ -1,13 +1,16 @@
 package com.quiz.quiz_app;
 
 import android.app.AlertDialog;
-import androidx.appcompat.app.AppCompatActivity;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.text.Html;
 import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -62,22 +65,45 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         TriviaApi triviaApi = retrofit.create(TriviaApi.class);
 
-        triviaApi.getQuestions(5).enqueue(new Callback<TriviaResponse>() {
+        triviaApi.getQuestions(5).enqueue(new Callback<>() {
             @Override
-            public void onResponse(Call<TriviaResponse> call, Response<TriviaResponse> response) {
+            public void onResponse(@NonNull Call<TriviaResponse> call, @NonNull Response<TriviaResponse> response) {
                 if (response.isSuccessful() && response.body() != null) {
                     questions = response.body().results;
-                    totalQuestionTextView.setText("Total Questions: " + questions.size());
+                    totalQuestionTextView.setText(getString(R.string.total_questions_text, questions.size()));
                     loadNewQuestion();
+                } else {
+                    loadMockQuestions(); // fallback if response is empty
                 }
             }
 
             @Override
-            public void onFailure(Call<TriviaResponse> call, Throwable t) {
-                Log.e("API_ERROR", t.getMessage());
-                questionTextView.setText("Failed to load questions. Please try again.");
+            public void onFailure(@NonNull Call<TriviaResponse> call, @NonNull Throwable t) {
+                Log.e("API_ERROR", "Failed to fetch questions: " + t.getMessage());
+                loadMockQuestions(); // fallback if network fails
             }
         });
+
+    }
+
+    private void loadMockQuestions() {
+        questions.clear();
+
+        for (int i = 0; i < QuestionAnswer.question.length; i++) {
+            TriviaResponse.Result q = new TriviaResponse.Result();
+            q.question = QuestionAnswer.question[i];
+            q.correct_answer = QuestionAnswer.correctAnswers[i];
+            q.incorrect_answers = new ArrayList<>();
+            for (String choice : QuestionAnswer.choices[i]) {
+                if (!choice.equals(QuestionAnswer.correctAnswers[i])) {
+                    q.incorrect_answers.add(choice);
+                }
+            }
+            questions.add(q);
+        }
+
+        totalQuestionTextView.setText(getString(R.string.total_questions_text, questions.size()));
+        loadNewQuestion();
     }
 
     private void loadNewQuestion() {
@@ -88,7 +114,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
         TriviaResponse.Result currentQ = questions.get(currentQuestionIndex);
 
-        questionTextView.setText(android.text.Html.fromHtml(currentQ.question)); // API returns HTML entities sometimes
+        questionTextView.setText(Html.fromHtml(currentQ.question, Html.FROM_HTML_MODE_LEGACY));
 
         currentChoices.clear();
         currentChoices.addAll(currentQ.incorrect_answers);
@@ -104,16 +130,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void finishQuiz() {
-        String passStatus;
-        if (score >= questions.size() * 0.6) {
-            passStatus = "Passed";
-        } else {
-            passStatus = "Failed";
-        }
+        String passStatus = (score >= questions.size() * 0.6) ? "Passed" : "Failed";
+
         new AlertDialog.Builder(this)
                 .setTitle(passStatus)
-                .setMessage("Your Score is " + score + " Out of " + questions.size())
-                .setPositiveButton("Restart", ((dialog, i) -> restartQuiz()))
+                .setMessage(getString(R.string.score_message, score, questions.size()))
+                .setPositiveButton("Restart", (dialog, i) -> restartQuiz())
                 .setCancelable(false)
                 .show();
     }
@@ -121,7 +143,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private void restartQuiz() {
         score = 0;
         currentQuestionIndex = 0;
-        fetchQuestionsFromApi(); // fetch fresh questions again
+        fetchQuestionsFromApi();
     }
 
     @Override
